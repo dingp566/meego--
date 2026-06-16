@@ -1,0 +1,27 @@
+{
+  "dashboard": [
+    {
+      "key": "dashboard_deliverables",
+      "name": "交付物",
+      "description": "管理DOCX交付物版本和差异",
+      "i18n_info": {
+        "zh-cn": {
+          "name": "交付物",
+          "description": "管理DOCX交付物版本和差异"
+        },
+        "en-us": {
+          "name": "Deliverables",
+          "description": "Manage DOCX versions and diffs"
+        }
+      },
+      "work_item_type": [
+        "_all"
+      ],
+      "platform": {
+        "web": {
+          "resource": "dashboard_web_deliverables"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "siteDomain": "https://project.feishu.cn",
+  "pluginId": "<YOUR_PLUGIN_ID>",
+  "pluginSecret": "<YOUR_PLUGIN_SECRET>",
+  "resources": [
+    {
+      "id": "dashboard_web_deliverables",
+      "entry": "./src/features/dashboard_web_deliverables/index.tsx"
+    }
+  ],
+  "app_type": "normal",
+  "source_type": "remote"
+}
