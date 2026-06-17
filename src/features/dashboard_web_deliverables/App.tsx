@@ -45,6 +45,7 @@ const FALLBACK_WORK_ITEM_TITLE = '交付物版本管理';
 const App: React.FC = () => {
   const [workItemId, setWorkItemId] = useState(FALLBACK_WORK_ITEM_ID);
   const [workItemTitle, setWorkItemTitle] = useState(FALLBACK_WORK_ITEM_TITLE);
+  const [runtimeContext, setRuntimeContext] = useState<Record<string, any> | undefined>();
   const [versions, setVersions] = useState<DeliverableVersion[]>([]);
   const [baselineVersionId, setBaselineVersionId] = useState('');
   const [pendingUpload, setPendingUpload] = useState<PendingUpload | null>(null);
@@ -75,6 +76,7 @@ const App: React.FC = () => {
           FALLBACK_WORK_ITEM_ID;
 
         if (mounted) {
+          setRuntimeContext(runtimeContext);
           setWorkItemId(String(id));
           const title = await loadWorkItemTitle(runtimeContext);
 
@@ -89,6 +91,7 @@ const App: React.FC = () => {
           });
         }
       } catch {
+        setRuntimeContext(undefined);
         setWorkItemId(FALLBACK_WORK_ITEM_ID);
         setWorkItemTitle(FALLBACK_WORK_ITEM_TITLE);
       }
@@ -239,9 +242,17 @@ const App: React.FC = () => {
     }
 
     setIsParsingDocLink(true);
-    const parsedDocument = await parseCloudDocumentLink(url);
-    createVersionFromCloudDocument(url, parsedDocument, docLinkPastedTitle);
-    setIsParsingDocLink(false);
+
+    try {
+      const [parsedDocument, fieldTitle] = await Promise.all([
+        parseCloudDocumentLink(url),
+        resolveCloudDocumentTitleFromWorkItem(url, runtimeContext),
+      ]);
+
+      createVersionFromCloudDocument(url, parsedDocument, fieldTitle || docLinkPastedTitle);
+    } finally {
+      setIsParsingDocLink(false);
+    }
   }
 
   async function handleConfirmUpload() {
@@ -966,6 +977,127 @@ async function parseCloudDocumentLink(url: string): Promise<ParsedCloudDocument 
     };
   } catch {
     return null;
+  }
+}
+
+async function resolveCloudDocumentTitleFromWorkItem(
+  url: string,
+  context: Record<string, any> | undefined,
+): Promise<string> {
+  try {
+    if (!context?.spaceId || !context?.workObjectId || !context?.workItemId) {
+      return '';
+    }
+
+    const workItem = await window.JSSDK?.WorkItem?.load?.({
+      spaceId: context.spaceId,
+      workObjectId: context.workObjectId,
+      workItemId: Number(context.workItemId),
+    });
+    const title = findTitleByUrl(workItem, url);
+    console.log('[URL field title lookup]', { url, title, workItem });
+
+    return title;
+  } catch (reason) {
+    console.error('[URL field title lookup]', reason);
+    return '';
+  }
+}
+
+function findTitleByUrl(value: unknown, targetUrl: string, seen = new WeakSet<object>()): string {
+  if (!value || typeof value !== 'object') {
+    return '';
+  }
+
+  if (seen.has(value)) {
+    return '';
+  }
+
+  seen.add(value);
+
+  const record = value as Record<string, unknown>;
+  const url = extractUrlValue(record);
+
+  if (url && isSameDocumentUrl(url, targetUrl)) {
+    return extractDisplayTitle(record, targetUrl);
+  }
+
+  for (const key of Object.keys(record)) {
+    const child = record[key];
+
+    if (Array.isArray(child)) {
+      for (const item of child) {
+        const title = findTitleByUrl(item, targetUrl, seen);
+
+        if (title) {
+          return title;
+        }
+      }
+    } else {
+      const title = findTitleByUrl(child, targetUrl, seen);
+
+      if (title) {
+        return title;
+      }
+    }
+  }
+
+  return '';
+}
+
+function extractUrlValue(record: Record<string, unknown>) {
+  const directKeys = ['url', 'href', 'link', 'linkUrl', 'targetUrl', 'openUrl', 'value'];
+
+  for (const key of directKeys) {
+    const value = record[key];
+
+    if (typeof value === 'string' && isFeishuDocUrl(value)) {
+      return value;
+    }
+  }
+
+  return '';
+}
+
+function extractDisplayTitle(record: Record<string, unknown>, targetUrl: string) {
+  const titleKeys = [
+    'title',
+    'name',
+    'text',
+    'displayName',
+    'display_name',
+    'label',
+    'linkText',
+    'link_text',
+    'displayText',
+    'display_text',
+    'attributeValue',
+  ];
+
+  for (const key of titleKeys) {
+    const value = record[key];
+
+    if (typeof value === 'string') {
+      const title = value.trim();
+
+      if (title && !isSameDocumentUrl(title, targetUrl) && !isFeishuDocUrl(title)) {
+        return title;
+      }
+    }
+  }
+
+  return '';
+}
+
+function isSameDocumentUrl(left: string, right: string) {
+  try {
+    const leftUrl = new URL(left);
+    const rightUrl = new URL(right);
+    const normalize = (url: URL) => `${url.hostname.toLowerCase()}${url.pathname.replace(/\/$/, '')}`;
+
+    return normalize(leftUrl) === normalize(rightUrl);
+  } catch {
+    return left.trim() === right.trim();
   }
 }
 
