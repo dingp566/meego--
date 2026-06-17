@@ -57,7 +57,7 @@ const App: React.FC = () => {
   const [previewVersionId, setPreviewVersionId] = useState('');
   const [fromVersionId, setFromVersionId] = useState('');
   const [toVersionId, setToVersionId] = useState('');
-  const [viewMode, setViewMode] = useState<'summary' | 'compare'>('summary');
+  const [viewMode, setViewMode] = useState<'summary' | 'compare'>('compare');
 
   useEffect(() => {
     let mounted = true;
@@ -294,10 +294,6 @@ const App: React.FC = () => {
     setBaselineVersionId(nextBaselineId);
     setDocLinkUrl('');
     setDocLinkPastedTitle('');
-
-    if (!parsedDocument?.content) {
-      setError('已保存云文档链接；自动读取标题和正文需要接入后端解析接口 /api/proxy/lark-documents/parse');
-    }
   }
 
   function handleSetBaseline(versionId: string) {
@@ -438,7 +434,7 @@ const App: React.FC = () => {
                 </label>
                 {docLinkPastedTitle && <p className="doc-link-title-preview">识别到：{docLinkPastedTitle}</p>}
                 <p className="doc-link-hint">
-                  后端解析接口接入后，将自动读取云文档标题和正文；当前可先保存链接版本。
+                  从飞书复制带标题的链接时会自动识别名称；后端解析接入后可自动读取云文档标题和正文。
                 </p>
                 <button className="primary-action doc-link-submit" disabled={isParsingDocLink} onClick={handlePrepareDocLink}>
                   {isParsingDocLink ? '解析中...' : '确认链接'}
@@ -491,11 +487,11 @@ const App: React.FC = () => {
                 ))}
               </select>
               <div className="segment">
-                <button className={viewMode === 'summary' ? 'active' : ''} onClick={() => setViewMode('summary')}>
-                  汇总
-                </button>
                 <button className={viewMode === 'compare' ? 'active' : ''} onClick={() => setViewMode('compare')}>
                   对比
+                </button>
+                <button className={viewMode === 'summary' ? 'active' : ''} onClick={() => setViewMode('summary')}>
+                  汇总
                 </button>
               </div>
             </div>
