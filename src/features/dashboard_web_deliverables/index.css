@@ -24,7 +24,7 @@ button {
 
 .deliverable-page {
   min-height: 100vh;
-  padding: 16px;
+  padding: 24px;
 }
 
 .header-band,
@@ -39,7 +39,7 @@ button {
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  padding: 16px 18px;
+  padding: 18px 20px;
 }
 
 .eyebrow {
@@ -55,14 +55,13 @@ p {
 }
 
 h1 {
-  font-size: 20px;
-  line-height: 28px;
+  font-size: 22px;
+  line-height: 30px;
 }
 
 h2 {
-  font-size: 14px;
-  line-height: 22px;
-  font-weight: 600;
+  font-size: 16px;
+  line-height: 24px;
 }
 
 .status-panel {
@@ -85,7 +84,6 @@ h2 {
   display: block;
   margin-top: 2px;
   font-size: 20px;
-  line-height: 26px;
 }
 
 .page-stack {
@@ -96,29 +94,15 @@ h2 {
 }
 
 .section-block {
-  padding: 16px 18px;
+  padding: 18px;
 }
 
 .section-title {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 12px;
-}
-
-.section-title h2 {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-}
-
-.section-title h2::before {
-  content: "";
-  width: 3px;
-  height: 14px;
-  border-radius: 2px;
-  background: #3370ff;
+  margin-bottom: 14px;
 }
 
 .section-title.compact {
@@ -127,7 +111,7 @@ h2 {
 
 .upload-zone {
   display: flex;
-  min-height: 116px;
+  min-height: 128px;
   flex-direction: column;
   align-items: center;
   justify-content: center;
@@ -151,12 +135,6 @@ h2 {
 
 .upload-zone small {
   color: #8f959e;
-  font-size: 12px;
-}
-
-.upload-zone strong {
-  font-size: 14px;
-  line-height: 22px;
 }
 
 .upload-icon {
@@ -210,117 +188,6 @@ h2 {
 }
 
 .pending-actions .primary-action {
-  border-color: #3370ff;
-  background: #3370ff;
-  color: #fff;
-}
-
-.source-switch {
-  display: inline-flex;
-  gap: 2px;
-  margin-bottom: 10px;
-  padding: 2px;
-  border-radius: 7px;
-  background: #f2f3f5;
-}
-
-.source-switch button {
-  height: 28px;
-  padding: 0 12px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: #646a73;
-  font-size: 12px;
-}
-
-.source-switch button.active {
-  background: #fff;
-  color: #245bdb;
-  box-shadow: 0 1px 3px rgba(31, 35, 41, 0.12);
-}
-
-.doc-link-form {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 10px;
-  align-items: end;
-  padding: 12px;
-  border: 1px solid #e5e6eb;
-  border-radius: 8px;
-  background: #fcfdff;
-}
-
-.doc-link-form label {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 6px;
-  color: #646a73;
-  font-size: 12px;
-}
-
-.doc-link-form input,
-.doc-link-form textarea {
-  width: 100%;
-  border: 1px solid #dcdfe6;
-  border-radius: 6px;
-  background: #fff;
-  color: #1f2329;
-  font: inherit;
-  font-size: 13px;
-  outline: none;
-}
-
-.doc-link-form input {
-  height: 34px;
-  padding: 0 10px;
-}
-
-.doc-link-form textarea {
-  min-height: 68px;
-  resize: vertical;
-  padding: 8px 10px;
-  line-height: 20px;
-}
-
-.doc-link-form input:focus,
-.doc-link-form textarea:focus {
-  border-color: #3370ff;
-  box-shadow: 0 0 0 2px rgba(51, 112, 255, 0.12);
-}
-
-.doc-link-hint,
-.doc-link-title-preview {
-  grid-column: 1 / -1;
-  color: #646a73;
-  font-size: 12px;
-  line-height: 20px;
-}
-
-.doc-link-title-preview {
-  display: inline-flex;
-  width: fit-content;
-  max-width: 100%;
-  align-items: center;
-  gap: 6px;
-  margin: 0;
-  padding: 4px 8px;
-  border: 1px solid #d7e3ff;
-  border-radius: 6px;
-  background: #f7faff;
-  color: #245bdb;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.doc-link-hint {
-  margin: -2px 0 0;
-}
-
-.doc-link-submit {
-  align-self: end;
   border-color: #3370ff;
   background: #3370ff;
   color: #fff;
@@ -384,8 +251,7 @@ h2 {
   color: #245bdb;
 }
 
-.word-file-icon,
-.lark-doc-icon {
+.word-file-icon {
   display: inline-flex;
   width: 22px;
   height: 22px;
@@ -397,11 +263,6 @@ h2 {
   font-size: 11px;
   font-weight: 800;
   line-height: 1;
-}
-
-.lark-doc-icon {
-  background: #14c0a3;
-  font-size: 10px;
 }
 
 .version-file-meta {
@@ -419,8 +280,6 @@ h2 {
 
 .version-file-meta strong {
   color: #1f2329;
-  font-size: 14px;
-  line-height: 20px;
 }
 
 .version-file-meta small {
@@ -761,8 +620,8 @@ select {
 
 .preview-body h2 {
   margin-bottom: 20px;
-  font-size: 22px;
-  line-height: 32px;
+  font-size: 24px;
+  line-height: 34px;
 }
 
 .preview-body p + p {
@@ -812,10 +671,6 @@ select {
   .pending-bar {
     align-items: flex-start;
     flex-direction: column;
-  }
-
-  .doc-link-form {
-    grid-template-columns: 1fr;
   }
 
   .status-panel {
