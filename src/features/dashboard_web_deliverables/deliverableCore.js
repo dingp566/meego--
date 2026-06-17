@@ -17,23 +17,12 @@ export function normalizeParagraphs(text) {
     .filter(Boolean);
 }
 
-export function buildVersion({
-  versions,
-  fileName,
-  fileSize,
-  extractedText,
-  changeNote,
-  author,
-  sourceType = 'docx',
-  sourceUrl = '',
-}) {
+export function buildVersion({ versions, fileName, fileSize, extractedText, changeNote, author }) {
   return {
     id: `version_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     versionName: getNextVersionName(versions),
     fileName,
     fileSize,
-    sourceType,
-    sourceUrl,
     extractedText,
     changeNote: changeNote.trim(),
     author,
