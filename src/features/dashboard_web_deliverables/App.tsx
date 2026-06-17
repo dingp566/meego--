@@ -8,17 +8,28 @@ type DeliverableVersion = {
   versionName: string;
   fileName: string;
   fileSize: number;
+  sourceType?: 'docx' | 'lark_doc';
+  sourceUrl?: string;
   extractedText: string;
   changeNote: string;
   author: string;
   createdAt: string;
 };
 
-type PendingUpload = {
-  file: File;
-  extractedText: string;
-  versionName: string;
-};
+type PendingUpload =
+  | {
+      sourceType: 'docx';
+      file: File;
+      extractedText: string;
+      versionName: string;
+    }
+  | {
+      sourceType: 'lark_doc';
+      title: string;
+      url: string;
+      extractedText: string;
+      versionName: string;
+    };
 
 type DiffBlock = {
   type: 'added' | 'removed' | 'modified' | 'unchanged';
@@ -40,6 +51,10 @@ const App: React.FC = () => {
   const [versions, setVersions] = useState<DeliverableVersion[]>([]);
   const [baselineVersionId, setBaselineVersionId] = useState('');
   const [pendingUpload, setPendingUpload] = useState<PendingUpload | null>(null);
+  const [sourceMode, setSourceMode] = useState<'docx' | 'lark_doc'>('docx');
+  const [docLinkUrl, setDocLinkUrl] = useState('');
+  const [docLinkTitle, setDocLinkTitle] = useState('');
+  const [docLinkSnapshot, setDocLinkSnapshot] = useState('');
   const [error, setError] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [previewVersionId, setPreviewVersionId] = useState('');
@@ -134,6 +149,7 @@ const App: React.FC = () => {
   function renderVersionCard(version: DeliverableVersion, extraClass = '') {
     const isBaseline = version.id === baselineVersion?.id;
     const isCurrent = version.id === currentVersion?.id;
+    const sourceType = version.sourceType || 'docx';
 
     return (
       <article
@@ -141,24 +157,24 @@ const App: React.FC = () => {
         className={['version-card', isBaseline ? 'baseline' : '', extraClass].filter(Boolean).join(' ')}
       >
         <button className="version-main" onClick={() => setPreviewVersionId(version.id)}>
-          <WordFileIcon />
+          <SourceIcon sourceType={sourceType} />
           <span className="version-file-meta">
             <strong>{version.fileName}</strong>
             <small>
               {version.versionName} · {isBaseline ? '基线版本 · ' : ''}
               {isCurrent ? '当前版本 · ' : ''}
-              {formatFileSize(version.fileSize)} · {formatDate(version.createdAt)}
+              {sourceLabel(sourceType)} · {formatVersionSize(version)} · {formatDate(version.createdAt)}
             </small>
           </span>
         </button>
         <div className="version-actions">
           <button
             className="icon-action"
-            title="下载原始文档"
-            aria-label={`下载 ${version.versionName}`}
-            onClick={() => handleDownloadVersion(version)}
+            title={sourceType === 'lark_doc' ? '打开云文档' : '下载原始文档'}
+            aria-label={`${sourceType === 'lark_doc' ? '打开' : '下载'} ${version.versionName}`}
+            onClick={() => handlePrimaryVersionAction(version)}
           >
-            <DownloadIcon />
+            {sourceType === 'lark_doc' ? <OpenLinkIcon /> : <DownloadIcon />}
           </button>
           <button
             className="icon-action"
@@ -199,6 +215,7 @@ const App: React.FC = () => {
     try {
       const extractedText = await extractDocxText(await file.arrayBuffer());
       setPendingUpload({
+        sourceType: 'docx',
         file,
         extractedText,
         versionName: nextVersionName,
@@ -215,15 +232,43 @@ const App: React.FC = () => {
     handleFile(event.dataTransfer.files[0]);
   }
 
+  function handlePrepareDocLink() {
+    setError('');
+    const url = docLinkUrl.trim();
+    const title = docLinkTitle.trim() || guessDocTitleFromUrl(url);
+    const snapshot = docLinkSnapshot.trim();
+
+    if (!isFeishuDocUrl(url)) {
+      setError('请输入飞书云文档链接，例如 larkoffice.com/docx 或 larkoffice.com/wiki 链接');
+      return;
+    }
+
+    if (!snapshot) {
+      setError('请粘贴一份云文档正文快照，用于保存版本和 Diff 对比');
+      return;
+    }
+
+    setPendingUpload({
+      sourceType: 'lark_doc',
+      title,
+      url,
+      extractedText: snapshot,
+      versionName: nextVersionName,
+    });
+  }
+
   async function handleConfirmUpload() {
     if (!pendingUpload) {
       return;
     }
 
+    const isDocx = pendingUpload.sourceType === 'docx';
     const version = buildVersion({
       versions,
-      fileName: pendingUpload.file.name,
-      fileSize: pendingUpload.file.size,
+      fileName: isDocx ? pendingUpload.file.name : pendingUpload.title,
+      fileSize: isDocx ? pendingUpload.file.size : 0,
+      sourceType: pendingUpload.sourceType,
+      sourceUrl: isDocx ? '' : pendingUpload.url,
       extractedText: pendingUpload.extractedText,
       changeNote: '',
       author: '当前用户',
@@ -231,12 +276,17 @@ const App: React.FC = () => {
     const nextVersions = [version, ...versions];
     const nextBaselineId = baselineVersionId || version.id;
 
-    await saveVersionFile(version.id, pendingUpload.file);
+    if (isDocx) {
+      await saveVersionFile(version.id, pendingUpload.file);
+    }
     saveVersions(workItemId, nextVersions);
     saveBaselineVersionId(workItemId, nextBaselineId);
     setVersions(nextVersions);
     setBaselineVersionId(nextBaselineId);
     setPendingUpload(null);
+    setDocLinkUrl('');
+    setDocLinkTitle('');
+    setDocLinkSnapshot('');
   }
 
   function handleSetBaseline(versionId: string) {
@@ -274,6 +324,22 @@ const App: React.FC = () => {
     URL.revokeObjectURL(url);
   }
 
+  function handlePrimaryVersionAction(version: DeliverableVersion) {
+    if ((version.sourceType || 'docx') === 'lark_doc' && version.sourceUrl) {
+      window.open(version.sourceUrl, '_blank', 'noopener,noreferrer');
+      return;
+    }
+
+    handleDownloadVersion(version);
+  }
+
+  function resetPendingUpload() {
+    setPendingUpload(null);
+    setDocLinkUrl('');
+    setDocLinkTitle('');
+    setDocLinkSnapshot('');
+  }
+
   return (
     <main className="deliverable-page">
       <section className="header-band">
@@ -299,11 +365,14 @@ const App: React.FC = () => {
                 <div>
                   <strong>附件编辑中，确认后完成更新</strong>
                   <span>
-                    {pendingUpload.versionName} · {pendingUpload.file.name} · {formatFileSize(pendingUpload.file.size)}
+                    {pendingUpload.versionName} ·{' '}
+                    {pendingUpload.sourceType === 'docx'
+                      ? `${pendingUpload.file.name} · ${formatFileSize(pendingUpload.file.size)}`
+                      : `${pendingUpload.title} · 飞书云文档`}
                   </span>
                 </div>
                 <div className="pending-actions">
-                  <button onClick={() => setPendingUpload(null)}>取消</button>
+                  <button onClick={resetPendingUpload}>取消</button>
                   <button className="primary-action" onClick={handleConfirmUpload}>
                     确定
                   </button>
@@ -311,20 +380,63 @@ const App: React.FC = () => {
               </div>
             )}
 
-            <label
-              className="upload-zone"
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={handleDrop}
-            >
-              <input
-                type="file"
-                accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                onChange={(event) => handleFile(event.target.files?.[0])}
-              />
-              <span className="upload-icon">↑</span>
-              <strong>{isUploading ? '正在解析 DOCX...' : '点击上传或拖拽 DOCX 文件到这里'}</strong>
-              <small>当前 MVP 仅支持 DOCX，系统会保存正文段落用于版本 Diff</small>
-            </label>
+            <div className="source-switch" aria-label="交付物来源">
+              <button className={sourceMode === 'docx' ? 'active' : ''} onClick={() => setSourceMode('docx')}>
+                DOCX 文件
+              </button>
+              <button className={sourceMode === 'lark_doc' ? 'active' : ''} onClick={() => setSourceMode('lark_doc')}>
+                飞书云文档链接
+              </button>
+            </div>
+
+            {sourceMode === 'docx' && (
+              <label
+                className="upload-zone"
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={handleDrop}
+              >
+                <input
+                  type="file"
+                  accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  onChange={(event) => handleFile(event.target.files?.[0])}
+                />
+                <span className="upload-icon">↑</span>
+                <strong>{isUploading ? '正在解析 DOCX...' : '点击上传或拖拽 DOCX 文件到这里'}</strong>
+                <small>支持 DOCX，系统会保存正文段落用于版本 Diff</small>
+              </label>
+            )}
+
+            {sourceMode === 'lark_doc' && (
+              <div className="doc-link-form">
+                <label>
+                  <span>云文档链接</span>
+                  <input
+                    value={docLinkUrl}
+                    placeholder="https://bytedance.larkoffice.com/docx/..."
+                    onChange={(event) => setDocLinkUrl(event.target.value)}
+                  />
+                </label>
+                <label>
+                  <span>文档名称</span>
+                  <input
+                    value={docLinkTitle}
+                    placeholder="不填时自动使用链接尾部标识"
+                    onChange={(event) => setDocLinkTitle(event.target.value)}
+                  />
+                </label>
+                <label className="snapshot-field">
+                  <span>正文快照</span>
+                  <textarea
+                    value={docLinkSnapshot}
+                    placeholder="粘贴当前云文档正文内容，用于保存版本和 Diff 对比"
+                    onChange={(event) => setDocLinkSnapshot(event.target.value)}
+                  />
+                </label>
+                <button className="primary-action doc-link-submit" onClick={handlePrepareDocLink}>
+                  确认链接
+                </button>
+              </div>
+            )}
 
             {error && <p className="error-text">{error}</p>}
 
@@ -334,7 +446,7 @@ const App: React.FC = () => {
                 <span>{versions.length} 个版本</span>
               </div>
 
-              {versions.length === 0 && <EmptyState text="上传 DOCX 后可在这里管理历史附件" />}
+              {versions.length === 0 && <EmptyState text="上传 DOCX 或添加云文档链接后可在这里管理历史版本" />}
               {versions.length > 0 && (
                 <div className="version-rail">
                   {pinnedVersion && renderVersionCard(pinnedVersion, 'pinned')}
@@ -395,7 +507,7 @@ const App: React.FC = () => {
         <DocumentPreviewModal
           version={previewVersion}
           onClose={() => setPreviewVersionId('')}
-          onDownload={() => handleDownloadVersion(previewVersion)}
+          onPrimaryAction={() => handlePrimaryVersionAction(previewVersion)}
         />
       )}
     </main>
@@ -405,12 +517,13 @@ const App: React.FC = () => {
 function DocumentPreviewModal({
   version,
   onClose,
-  onDownload,
+  onPrimaryAction,
 }: {
   version: DeliverableVersion;
   onClose: () => void;
-  onDownload: () => void;
+  onPrimaryAction: () => void;
 }) {
+  const sourceType = version.sourceType || 'docx';
   const paragraphs = version.extractedText
     .split(/\n+/)
     .map((item) => item.trim())
@@ -421,11 +534,12 @@ function DocumentPreviewModal({
       <section className="preview-modal">
         <header className="preview-head">
           <div className="preview-file">
-            <WordFileIcon />
+            <SourceIcon sourceType={sourceType} />
             <div>
               <strong>{version.fileName}</strong>
               <small>
-                {version.versionName} · {formatFileSize(version.fileSize)} · {formatDate(version.createdAt)}
+                {version.versionName} · {sourceLabel(sourceType)} · {formatVersionSize(version)} ·{' '}
+                {formatDate(version.createdAt)}
               </small>
             </div>
           </div>
@@ -435,15 +549,15 @@ function DocumentPreviewModal({
         </header>
         <div className="preview-body">
           <h2>{version.fileName.replace(/\.docx$/i, '')}</h2>
-          {paragraphs.length === 0 && <EmptyState text="该 DOCX 未解析到可阅览正文" />}
+          {paragraphs.length === 0 && <EmptyState text="该版本未保存可阅览正文" />}
           {paragraphs.map((paragraph, index) => (
             <p key={`${version.id}-${index}`}>{paragraph}</p>
           ))}
         </div>
         <footer className="preview-footer">
-          <button className="preview-download" onClick={onDownload}>
-            <DownloadIcon />
-            下载附件
+          <button className="preview-download" onClick={onPrimaryAction}>
+            {sourceType === 'lark_doc' ? <OpenLinkIcon /> : <DownloadIcon />}
+            {sourceType === 'lark_doc' ? '打开云文档' : '下载附件'}
           </button>
         </footer>
       </section>
@@ -580,12 +694,34 @@ function WordFileIcon() {
   );
 }
 
+function LarkDocIcon() {
+  return (
+    <span className="lark-doc-icon" aria-hidden="true">
+      云
+    </span>
+  );
+}
+
+function SourceIcon({ sourceType }: { sourceType: 'docx' | 'lark_doc' }) {
+  return sourceType === 'lark_doc' ? <LarkDocIcon /> : <WordFileIcon />;
+}
+
 function DownloadIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M12 3v11" />
       <path d="m7 10 5 5 5-5" />
       <path d="M5 20h14" />
+    </svg>
+  );
+}
+
+function OpenLinkIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M14 4h6v6" />
+      <path d="M10 14 20 4" />
+      <path d="M20 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h5" />
     </svg>
   );
 }
@@ -761,6 +897,40 @@ function formatFileSize(size: number) {
   }
 
   return `${(size / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function sourceLabel(sourceType: 'docx' | 'lark_doc') {
+  return sourceType === 'lark_doc' ? '飞书云文档' : 'DOCX';
+}
+
+function formatVersionSize(version: DeliverableVersion) {
+  return (version.sourceType || 'docx') === 'lark_doc' ? '链接' : formatFileSize(version.fileSize);
+}
+
+function isFeishuDocUrl(value: string) {
+  try {
+    const url = new URL(value);
+    const host = url.hostname.toLowerCase();
+    const isFeishuHost =
+      host === 'feishu.cn' ||
+      host.endsWith('.feishu.cn') ||
+      host === 'larkoffice.com' ||
+      host.endsWith('.larkoffice.com');
+    const isDocPath = /\/(docx|doc|wiki|mindnotes|sheets|base)\//i.test(url.pathname);
+
+    return isFeishuHost && isDocPath;
+  } catch {
+    return false;
+  }
+}
+
+function guessDocTitleFromUrl(value: string) {
+  try {
+    const token = new URL(value).pathname.split('/').filter(Boolean).pop();
+    return token ? `飞书云文档 ${token.slice(0, 8)}` : '飞书云文档链接';
+  } catch {
+    return '飞书云文档链接';
+  }
 }
 
 function formatDate(value: string) {

@@ -28,6 +28,23 @@ test('buildVersion creates the next named version with metadata', () => {
   assert.equal(version.fileName, '可行性分析报告.docx');
 });
 
+test('buildVersion stores source metadata for cloud document links', () => {
+  const version = buildVersion({
+    versions: [],
+    fileName: '方案评审云文档',
+    fileSize: 0,
+    sourceType: 'lark_doc',
+    sourceUrl: 'https://bytedance.larkoffice.com/docx/example',
+    extractedText: '云文档正文',
+    changeNote: '',
+    author: 'tester',
+  });
+
+  assert.equal(version.versionName, 'V1');
+  assert.equal(version.sourceType, 'lark_doc');
+  assert.equal(version.sourceUrl, 'https://bytedance.larkoffice.com/docx/example');
+});
+
 test('parseDocumentXml extracts DOCX paragraphs from document.xml', () => {
   const xml = [
     '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>',
