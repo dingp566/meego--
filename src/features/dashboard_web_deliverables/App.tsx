@@ -995,7 +995,7 @@ async function resolveCloudDocumentTitleFromWorkItem(
       workItemId: Number(context.workItemId),
     });
     const title = findTitleByUrl(workItem, url);
-    console.log('[URL field title lookup]', { url, title, hasWorkItem: Boolean(workItem) });
+    console.log('[URL field title lookup]', { url, title, workItem });
 
     return title;
   } catch (reason) {
@@ -1022,8 +1022,8 @@ function findTitleByUrl(value: unknown, targetUrl: string, seen = new WeakSet<ob
     return extractDisplayTitle(record, targetUrl);
   }
 
-  for (const key of safeObjectKeys(record)) {
-    const child = safeRead(record, key);
+  for (const key of Object.keys(record)) {
+    const child = record[key];
 
     if (Array.isArray(child)) {
       for (const item of child) {
@@ -1049,7 +1049,7 @@ function extractUrlValue(record: Record<string, unknown>) {
   const directKeys = ['url', 'href', 'link', 'linkUrl', 'targetUrl', 'openUrl', 'value'];
 
   for (const key of directKeys) {
-    const value = safeRead(record, key);
+    const value = record[key];
 
     if (typeof value === 'string' && isFeishuDocUrl(value)) {
       return value;
@@ -1075,7 +1075,7 @@ function extractDisplayTitle(record: Record<string, unknown>, targetUrl: string)
   ];
 
   for (const key of titleKeys) {
-    const value = safeRead(record, key);
+    const value = record[key];
 
     if (typeof value === 'string') {
       const title = value.trim();
@@ -1087,22 +1087,6 @@ function extractDisplayTitle(record: Record<string, unknown>, targetUrl: string)
   }
 
   return '';
-}
-
-function safeObjectKeys(value: Record<string, unknown>) {
-  try {
-    return Object.keys(value);
-  } catch {
-    return [];
-  }
-}
-
-function safeRead(value: Record<string, unknown>, key: string) {
-  try {
-    return value[key];
-  } catch {
-    return undefined;
-  }
 }
 
 function isSameDocumentUrl(left: string, right: string) {
