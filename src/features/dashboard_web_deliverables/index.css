@@ -55,13 +55,13 @@ p {
 }
 
 h1 {
-  font-size: 22px;
-  line-height: 30px;
+  font-size: 20px;
+  line-height: 28px;
 }
 
 h2 {
-  font-size: 16px;
-  line-height: 24px;
+  font-size: 14px;
+  line-height: 22px;
 }
 
 .status-panel {
@@ -103,6 +103,25 @@ h2 {
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 14px;
+}
+
+.section-title h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #1f2329;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 22px;
+}
+
+.section-title h2::before {
+  display: inline-block;
+  width: 3px;
+  height: 14px;
+  border-radius: 2px;
+  background: #3370ff;
+  content: "";
 }
 
 .section-title.compact {
