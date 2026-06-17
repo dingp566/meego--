@@ -16,20 +16,17 @@ type DeliverableVersion = {
   createdAt: string;
 };
 
-type PendingUpload =
-  | {
-      sourceType: 'docx';
-      file: File;
-      extractedText: string;
-      versionName: string;
-    }
-  | {
-      sourceType: 'lark_doc';
-      title: string;
-      url: string;
-      extractedText: string;
-      versionName: string;
-    };
+type PendingUpload = {
+  sourceType: 'docx';
+  file: File;
+  extractedText: string;
+  versionName: string;
+};
+
+type ParsedCloudDocument = {
+  title: string;
+  content: string;
+};
 
 type DiffBlock = {
   type: 'added' | 'removed' | 'modified' | 'unchanged';
@@ -53,10 +50,10 @@ const App: React.FC = () => {
   const [pendingUpload, setPendingUpload] = useState<PendingUpload | null>(null);
   const [sourceMode, setSourceMode] = useState<'docx' | 'lark_doc'>('docx');
   const [docLinkUrl, setDocLinkUrl] = useState('');
-  const [docLinkTitle, setDocLinkTitle] = useState('');
-  const [docLinkSnapshot, setDocLinkSnapshot] = useState('');
+  const [docLinkPastedTitle, setDocLinkPastedTitle] = useState('');
   const [error, setError] = useState('');
   const [isUploading, setIsUploading] = useState(false);
+  const [isParsingDocLink, setIsParsingDocLink] = useState(false);
   const [previewVersionId, setPreviewVersionId] = useState('');
   const [fromVersionId, setFromVersionId] = useState('');
   const [toVersionId, setToVersionId] = useState('');
@@ -232,29 +229,19 @@ const App: React.FC = () => {
     handleFile(event.dataTransfer.files[0]);
   }
 
-  function handlePrepareDocLink() {
+  async function handlePrepareDocLink() {
     setError('');
     const url = docLinkUrl.trim();
-    const title = docLinkTitle.trim() || guessDocTitleFromUrl(url);
-    const snapshot = docLinkSnapshot.trim();
 
     if (!isFeishuDocUrl(url)) {
       setError('请输入飞书云文档链接，例如 larkoffice.com/docx 或 larkoffice.com/wiki 链接');
       return;
     }
 
-    if (!snapshot) {
-      setError('请粘贴一份云文档正文快照，用于保存版本和 Diff 对比');
-      return;
-    }
-
-    setPendingUpload({
-      sourceType: 'lark_doc',
-      title,
-      url,
-      extractedText: snapshot,
-      versionName: nextVersionName,
-    });
+    setIsParsingDocLink(true);
+    const parsedDocument = await parseCloudDocumentLink(url);
+    createVersionFromCloudDocument(url, parsedDocument, docLinkPastedTitle);
+    setIsParsingDocLink(false);
   }
 
   async function handleConfirmUpload() {
@@ -262,13 +249,12 @@ const App: React.FC = () => {
       return;
     }
 
-    const isDocx = pendingUpload.sourceType === 'docx';
     const version = buildVersion({
       versions,
-      fileName: isDocx ? pendingUpload.file.name : pendingUpload.title,
-      fileSize: isDocx ? pendingUpload.file.size : 0,
-      sourceType: pendingUpload.sourceType,
-      sourceUrl: isDocx ? '' : pendingUpload.url,
+      fileName: pendingUpload.file.name,
+      fileSize: pendingUpload.file.size,
+      sourceType: 'docx',
+      sourceUrl: '',
       extractedText: pendingUpload.extractedText,
       changeNote: '',
       author: '当前用户',
@@ -276,17 +262,42 @@ const App: React.FC = () => {
     const nextVersions = [version, ...versions];
     const nextBaselineId = baselineVersionId || version.id;
 
-    if (isDocx) {
-      await saveVersionFile(version.id, pendingUpload.file);
-    }
+    await saveVersionFile(version.id, pendingUpload.file);
     saveVersions(workItemId, nextVersions);
     saveBaselineVersionId(workItemId, nextBaselineId);
     setVersions(nextVersions);
     setBaselineVersionId(nextBaselineId);
     setPendingUpload(null);
+  }
+
+  function createVersionFromCloudDocument(
+    url: string,
+    parsedDocument: ParsedCloudDocument | null,
+    pastedTitle: string,
+  ) {
+    const version = buildVersion({
+      versions,
+      fileName: parsedDocument?.title || pastedTitle || '飞书云文档链接',
+      fileSize: 0,
+      sourceType: 'lark_doc',
+      sourceUrl: url,
+      extractedText: parsedDocument?.content || '',
+      changeNote: '',
+      author: '当前用户',
+    }) as DeliverableVersion;
+    const nextVersions = [version, ...versions];
+    const nextBaselineId = baselineVersionId || version.id;
+
+    saveVersions(workItemId, nextVersions);
+    saveBaselineVersionId(workItemId, nextBaselineId);
+    setVersions(nextVersions);
+    setBaselineVersionId(nextBaselineId);
     setDocLinkUrl('');
-    setDocLinkTitle('');
-    setDocLinkSnapshot('');
+    setDocLinkPastedTitle('');
+
+    if (!parsedDocument?.content) {
+      setError('已保存云文档链接；自动读取标题和正文需要接入后端解析接口 /api/proxy/lark-documents/parse');
+    }
   }
 
   function handleSetBaseline(versionId: string) {
@@ -335,9 +346,20 @@ const App: React.FC = () => {
 
   function resetPendingUpload() {
     setPendingUpload(null);
-    setDocLinkUrl('');
-    setDocLinkTitle('');
-    setDocLinkSnapshot('');
+  }
+
+  function handleDocLinkPaste(event: React.ClipboardEvent<HTMLInputElement>) {
+    const html = event.clipboardData.getData('text/html');
+    const plainText = event.clipboardData.getData('text/plain');
+    const pastedLink = extractLinkFromClipboard(html, plainText);
+
+    if (!pastedLink) {
+      return;
+    }
+
+    event.preventDefault();
+    setDocLinkUrl(pastedLink.url);
+    setDocLinkPastedTitle(pastedLink.title);
   }
 
   return (
@@ -365,10 +387,7 @@ const App: React.FC = () => {
                 <div>
                   <strong>附件编辑中，确认后完成更新</strong>
                   <span>
-                    {pendingUpload.versionName} ·{' '}
-                    {pendingUpload.sourceType === 'docx'
-                      ? `${pendingUpload.file.name} · ${formatFileSize(pendingUpload.file.size)}`
-                      : `${pendingUpload.title} · 飞书云文档`}
+                    {pendingUpload.versionName} · {pendingUpload.file.name} · {formatFileSize(pendingUpload.file.size)}
                   </span>
                 </div>
                 <div className="pending-actions">
@@ -414,26 +433,15 @@ const App: React.FC = () => {
                     value={docLinkUrl}
                     placeholder="https://bytedance.larkoffice.com/docx/..."
                     onChange={(event) => setDocLinkUrl(event.target.value)}
+                    onPaste={handleDocLinkPaste}
                   />
                 </label>
-                <label>
-                  <span>文档名称</span>
-                  <input
-                    value={docLinkTitle}
-                    placeholder="不填时自动使用链接尾部标识"
-                    onChange={(event) => setDocLinkTitle(event.target.value)}
-                  />
-                </label>
-                <label className="snapshot-field">
-                  <span>正文快照</span>
-                  <textarea
-                    value={docLinkSnapshot}
-                    placeholder="粘贴当前云文档正文内容，用于保存版本和 Diff 对比"
-                    onChange={(event) => setDocLinkSnapshot(event.target.value)}
-                  />
-                </label>
-                <button className="primary-action doc-link-submit" onClick={handlePrepareDocLink}>
-                  确认链接
+                {docLinkPastedTitle && <p className="doc-link-title-preview">识别到：{docLinkPastedTitle}</p>}
+                <p className="doc-link-hint">
+                  后端解析接口接入后，将自动读取云文档标题和正文；当前可先保存链接版本。
+                </p>
+                <button className="primary-action doc-link-submit" disabled={isParsingDocLink} onClick={handlePrepareDocLink}>
+                  {isParsingDocLink ? '解析中...' : '确认链接'}
                 </button>
               </div>
             )}
@@ -907,6 +915,64 @@ function formatVersionSize(version: DeliverableVersion) {
   return (version.sourceType || 'docx') === 'lark_doc' ? '链接' : formatFileSize(version.fileSize);
 }
 
+function extractLinkFromClipboard(html: string, plainText: string) {
+  const plainUrl = extractFirstFeishuUrl(plainText);
+
+  if (!html) {
+    return plainUrl ? { url: plainUrl, title: '' } : null;
+  }
+
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const anchors = Array.from(doc.querySelectorAll('a'));
+  const anchor = anchors.find((item) => {
+    const href = item.getAttribute('href') || '';
+    return isFeishuDocUrl(href);
+  });
+
+  if (!anchor) {
+    return plainUrl ? { url: plainUrl, title: '' } : null;
+  }
+
+  return {
+    url: anchor.href,
+    title: (anchor.textContent || '').trim(),
+  };
+}
+
+function extractFirstFeishuUrl(text: string) {
+  const matches = text.match(/https?:\/\/[^\s<>"']+/g) || [];
+  return matches.find((item) => isFeishuDocUrl(item)) || '';
+}
+
+async function parseCloudDocumentLink(url: string): Promise<ParsedCloudDocument | null> {
+  try {
+    const response = await fetch('/api/proxy/lark-documents/parse', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const data = (await response.json()) as Partial<ParsedCloudDocument>;
+    const title = typeof data.title === 'string' ? data.title.trim() : '';
+    const content = typeof data.content === 'string' ? data.content.trim() : '';
+
+    if (!title && !content) {
+      return null;
+    }
+
+    return {
+      title: title || '飞书云文档链接',
+      content,
+    };
+  } catch {
+    return null;
+  }
+}
+
 function isFeishuDocUrl(value: string) {
   try {
     const url = new URL(value);
@@ -921,15 +987,6 @@ function isFeishuDocUrl(value: string) {
     return isFeishuHost && isDocPath;
   } catch {
     return false;
-  }
-}
-
-function guessDocTitleFromUrl(value: string) {
-  try {
-    const token = new URL(value).pathname.split('/').filter(Boolean).pop();
-    return token ? `飞书云文档 ${token.slice(0, 8)}` : '飞书云文档链接';
-  } catch {
-    return '飞书云文档链接';
   }
 }
 
